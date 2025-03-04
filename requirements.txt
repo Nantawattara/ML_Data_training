@@ -1,7 +1,6 @@
 flask
-gunicorn
-numpy
-joblib
 flask-cors
-scikit-learn==1.5.1
-firebase-admin
+gunicorn
+joblib
+numpy
+scikit-learn
