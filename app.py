@@ -79,12 +79,22 @@ def home():
 
 @app.route("/predict", methods=["POST"])
 def predict():
+    
     if model is None:
         return jsonify({"error": "Model not available. Check server logs."}), 500
         
     try:
+        print("📩 Raw request data:", request.data)  # Print raw data for debugging
+
+        if not request.data:  # Check if the request body is empty
+            return jsonify({"error": "Empty request body"}), 400
+        
         data = request.get_json()
-        print(f"? Received Data: {data}")
+        
+        if data is None:  # get_json() returns None if JSON is invalid
+            return jsonify({"error": "Invalid JSON format"}), 400
+
+        print(f"✅ Received JSON: {data}")
         
         # Direct mapping for country
         print("Using hardcoded country encoding")
@@ -101,7 +111,7 @@ def predict():
             float(data["Cus_report"]),
             float(data["Cus_age"]),
             float(data["Cus_memb"]),
-            float(data["Cus_Active"]),
+            float(data["Cus_Active"]),  
             float(data["Cus_money"]),
             encoded_country
         ]
