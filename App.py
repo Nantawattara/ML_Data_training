@@ -1,47 +1,114 @@
-import streamlit as st
-import pickle
+import joblib
 import numpy as np
-import pandas as pd
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import pickle
 
-# โหลดโมเดลและ scaler
-with open("customer_churn_model.pkl", "rb") as model_file:
-    model = pickle.load(model_file)
-
-with open("scaler.pkl", "rb") as scaler_file:
-    scaler = pickle.load(scaler_file)
-
-# ตั้งค่าหน้าเว็บ
-st.title("Customer Churn Prediction")
-st.write("ป้อนข้อมูลของลูกค้าเพื่อดูว่ามีโอกาสเลิกใช้บริการหรือไม่")
-
-# สร้างอินพุตสำหรับผู้ใช้
-complain = st.selectbox("ลูกค้าเคยร้องเรียนหรือไม่?", [0, 1])
-age = st.number_input("อายุของลูกค้า", min_value=18, max_value=100, value=30)
-is_active = st.selectbox("ลูกค้าเป็น Active Member หรือไม่?", [0, 1])
-num_products = st.slider("จำนวนผลิตภัณฑ์ที่ใช้ (เช่น บัญชีเงินฝาก, บัตรเครดิต, สินเชื่อ ฯลฯ)", 1, 4, 1)
-geography = st.selectbox("ประเทศของลูกค้า", ["France", "Germany", "Spain"])
-balance = st.number_input("ยอดเงินในบัญชี", min_value=0.0, max_value=500000.0, value=50000.0)
-
-# แปลงค่าหมวดหมู่เป็นตัวเลข
-geo_map = {"France": 0, "Germany": 1, "Spain": 2}
-geography = geo_map[geography]
-
-# สร้าง DataFrame สำหรับโมเดล
-input_df = pd.DataFrame([[complain, age, is_active, num_products, geography, balance]], 
-                        columns=["Complain", "Age", "IsActiveMember", "NumOfProducts", "Geography", "Balance"])
-
-# ปรับขนาดข้อมูลด้วย StandardScaler
-input_data = scaler.transform(input_df)
-
-# ทำการทำนาย
-if st.button("🔮 ทำนายผลลัพธ์"):
-    prediction = model.predict(input_data)
-    probability = model.predict_proba(input_data)[:, 1][0]
+# Choose ONE approach for loading your model - not both
+# OPTION 1: Load from best_model.pkl which contains both model and encoders
+try:
+    print("Loading model from best_model.pkl")
+    final_model = joblib.load("best_model.pkl")
+    model = final_model["model"]
+    label_encoders = final_model["label_encoders"]
+except Exception as e:
+    print(f"Error loading from best_model.pkl: {str(e)}")
     
-    if prediction[0] == 1:
-        st.error(f"🚨 ลูกค้ารายนี้มีแนวโน้มที่จะเลิกใช้บริการ ({probability:.2%} ความน่าจะเป็น)")
-    else:
-        st.success(f"✅ ลูกค้ารายนี้มีแนวโน้มที่จะอยู่ต่อ ({(1 - probability):.2%} ความน่าจะเป็น)")
+    # OPTION 2: Load model and scaler separately
+    print("Loading model and scaler from separate files")
+    with open("customer_churn_model.pkl", "rb") as model_file:
+        model = pickle.load(model_file)
+    
+    with open("scaler.pkl", "rb") as scaler_file:
+        scaler = pickle.load(scaler_file)
 
-# แสดงข้อความแนะนำ
-st.markdown("**เคล็ดลับ:** ปรับข้อมูลแต่ละตัวเพื่อดูว่าปัจจัยไหนส่งผลต่อการเลิกใช้บริการมากที่สุด!")
+app = Flask(__name__)
+CORS(app)
+
+@app.route("/")
+def home():
+    return jsonify({"message": "Customer Churn Prediction API is running on Render"})
+
+@app.route("/predict", methods=["POST"])
+def predict():
+    try:
+        data = request.get_json()
+        print(f"🔹 Received Data: {data}")
+        
+        # Process country using label encoder
+        if 'label_encoders' in locals() or 'label_encoders' in globals():
+            # If we're using the best_model.pkl approach with label encoders
+            print(f"🔍 LabelEncoder for country: {label_encoders['Cus_contry'].classes_}")
+            
+            if data["Cus_contry"] not in label_encoders['Cus_contry'].classes_:
+                return jsonify({
+                    "error": f"Invalid country value: {data['Cus_contry']}, must be one of {label_encoders['Cus_contry'].classes_}"
+                }), 400
+            
+            encoded_country = label_encoders["Cus_contry"].transform([data["Cus_contry"]])[0]
+        else:
+            # If we don't have label encoders, we need a different approach
+            # This is just a placeholder - adjust according to your actual encoding approach
+            print("Warning: Using hardcoded country encoding")
+            country_mapping = {"France": 0, "Spain": 1, "Germany": 2}
+            encoded_country = country_mapping.get(data["Cus_contry"], -1)
+            
+            if encoded_country == -1:
+                return jsonify({
+                    "error": f"Invalid country value: {data['Cus_contry']}, must be one of {list(country_mapping.keys())}"
+                }), 400
+
+        # Extract and prepare all feature values
+        input_features = [
+            float(data["Cus_report"]),
+            float(data["Cus_age"]),
+            float(data["Cus_memb"]),
+            float(data["Cus_Active"]),
+            float(data["Cus_money"]),
+            encoded_country
+        ]
+        print(f"Features: {input_features}")
+
+        # Make sure the input is properly shaped for the scaler and model
+        input_array = np.array(input_features).reshape(1, -1)
+        
+        # Scale if scaler is available
+        if 'scaler' in locals() or 'scaler' in globals():
+            input_data = scaler.transform(input_array)
+            print("Data scaled for prediction")
+        else:
+            input_data = input_array
+            print("No scaler found, using raw features")
+            
+        # Make prediction
+        prediction = model.predict(input_data)
+        
+        # Get probability if the model supports it
+        try:
+            probability = model.predict_proba(input_data)[0][1]
+            probability_str = f"{probability:.2f}"
+        except:
+            probability_str = "N/A"
+            
+        # Process the prediction result
+        if 'label_encoders' in locals() or 'label_encoders' in globals() and "churn" in label_encoders:
+            # Convert encoded prediction back to original label
+            churn_prediction = label_encoders["churn"].inverse_transform([prediction[0]])[0]
+        else:
+            # If we don't have label encoders, just use the raw prediction
+            churn_prediction = "Yes" if prediction[0] == 1 else "No"
+
+        print(f"Prediction: {churn_prediction}, Probability: {probability_str}")
+        return jsonify({
+            "prediction": churn_prediction,
+            "probability": probability_str
+        })
+
+    except Exception as e:
+        import traceback
+        print(f"Server Error: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
