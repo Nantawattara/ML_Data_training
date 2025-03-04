@@ -8,11 +8,6 @@ import os
 # Create the Flask app
 app = Flask(__name__)
 CORS(app)
-
-# Initialize variables
-model = None
-scaler = None
-
 # Load models based on file availability
 # Determine the correct model path depending on the environment
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
