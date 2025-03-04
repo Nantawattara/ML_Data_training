@@ -22,14 +22,7 @@ try:
     # Try to load the combined model file first
     model_path = os.path.join(BASE_DIR, "best_model.pkl")
     if os.path.exists(model_path):
-        print(f"Loading model from {model_path}")
-        final_model = joblib.load(model_path)
-        model = final_model["model"]
-        label_encoders = final_model["label_encoders"]
-        print("✅ Successfully loaded model and encoders from best_model.pkl")
-    else:
         print(f"⚠️ Could not find {model_path}")
-        
         # Fall back to separate model files
         model_path = os.path.join(BASE_DIR, "customer_churn_model.pkl")
         scaler_path = os.path.join(BASE_DIR, "scaler.pkl")
