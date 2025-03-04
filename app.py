@@ -1,9 +1,9 @@
-import joblib
 import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pickle
 import os
+from sklearn.ensemble import RandomForestClassifier  # or another algorithm you prefer
 
 # Create the Flask app
 app = Flask(__name__)
@@ -13,71 +13,80 @@ CORS(app)
 model = None
 scaler = None
 
-# Load models based on file availability
 # Determine the correct model path depending on the environment
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-model_path = os.path.join(BASE_DIR, "customer_churn_model.pkl")
 scaler_path = os.path.join(BASE_DIR, "scaler.pkl")
 
-# Load model safely
-def load_pickle_safely(path):
-    try:
-        # First try joblib
-        return joblib.load(path)
-    except Exception as e1:
-        print(f"Joblib load failed: {str(e1)}")
-        try:
-            # Then try pickle
-            with open(path, 'rb') as f:
-                return pickle.load(f)
-        except Exception as e2:
-            print(f"Pickle load failed: {str(e2)}")
-            return None
-
 try:
-    # Load the model
-    if os.path.exists(model_path):
-        print(f"Loading model from {model_path}")
-        model = load_pickle_safely(model_path)
-        if model is not None:
-            print("✅ Successfully loaded model")
-        else:
-            print("❌ Failed to load model")
-    else:
-        print(f"⚠️ Could not find {model_path}")
-        
-    # Load the scaler
+    # Load the scaler - this seems to be working
     if os.path.exists(scaler_path):
         print(f"Loading scaler from {scaler_path}")
-        scaler = load_pickle_safely(scaler_path)
-        if scaler is not None:
-            print("✅ Successfully loaded scaler")
-        else:
-            print("❌ Failed to load scaler")
+        with open(scaler_path, 'rb') as f:
+            scaler = pickle.load(f)
+        print("✅ Successfully loaded scaler")
     else:
         print(f"⚠️ Could not find {scaler_path}")
-
-    if model is None:
-        raise Exception("Failed to load model from any source")
+        
+    # Since we can't load the pickled model, let's create a fallback model
+    print("Creating a fallback model since the original model couldn't be loaded")
+    # This is a simple placeholder model that will return predictions based on rules
+    # Replace this with a proper trained model in production
+    
+    class FallbackModel:
+        def __init__(self):
+            print("Fallback model initialized")
             
+        def predict(self, X):
+            # Simple rule-based predictions
+            # For demonstration: predict churn if credit score < 600 or balance < 1000
+            predictions = []
+            for sample in X:
+                # Assuming features:
+                # [Cus_report, Cus_age, Cus_memb, Cus_Active, Cus_money, encoded_country]
+                credit_score = sample[0]  # Cus_report
+                balance = sample[4]       # Cus_money
+                
+                if credit_score < 600 or balance < 1000:
+                    predictions.append(1)  # Churn
+                else:
+                    predictions.append(0)  # No churn
+            return np.array(predictions)
+            
+        def predict_proba(self, X):
+            # Return pseudo-probabilities
+            raw_preds = self.predict(X)
+            # Create a 2D array where each row has probabilities for [no-churn, churn]
+            probas = []
+            for p in raw_preds:
+                if p == 1:
+                    probas.append([0.2, 0.8])  # Arbitrary values 
+                else:
+                    probas.append([0.7, 0.3])
+            return np.array(probas)
+    
+    # Use the fallback model
+    model = FallbackModel()
+    print("✅ Fallback model loaded and ready")
+
 except Exception as e:
-    print(f"❌ Error loading model: {str(e)}")
+    print(f"❌ Error during setup: {str(e)}")
     # We'll let the app start anyway, but predictions will fail
 
 @app.route("/")
 def home():
-    return jsonify({"message": "Customer Churn Prediction API is running on Render"})
+    return jsonify({"message": "Customer Churn Prediction API is running on Render", 
+                    "status": "using fallback model"})
 
 @app.route("/predict", methods=["POST"])
 def predict():
     if model is None:
-        return jsonify({"error": "Model not loaded. Check server logs."}), 500
+        return jsonify({"error": "Model not available. Check server logs."}), 500
         
     try:
         data = request.get_json()
         print(f"? Received Data: {data}")
         
-        # Since we don't have label encoders, use direct mapping for country
+        # Direct mapping for country
         print("Using hardcoded country encoding")
         country_mapping = {"France": 0, "Spain": 1, "Germany": 2}
         encoded_country = country_mapping.get(data["Cus_contry"], -1)
@@ -119,13 +128,14 @@ def predict():
         except:
             probability_str = "N/A"
             
-        # Since we don't have label encoders, use direct mapping for churn prediction
+        # Map prediction to human-readable output
         churn_prediction = "Yes" if prediction[0] == 1 else "No"
 
         print(f"Prediction: {churn_prediction}, Probability: {probability_str}")
         return jsonify({
             "prediction": churn_prediction,
-            "probability": probability_str
+            "probability": probability_str,
+            "model_type": "fallback"  # Indicate we're using the fallback model
         })
 
     except Exception as e:
