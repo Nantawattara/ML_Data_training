@@ -48,7 +48,7 @@ def predict():
 
         # Prediction
         prediction = model.predict(scaled_features)[0]
-        probability = model.predict_proba(scaled_features)[0][1]  # Probability of churn
+        probability = model.predict_proba(scaled_features)[0][1]
 
         # Convert results
         churn_prediction = "Yes" if prediction == 1 else "No"
