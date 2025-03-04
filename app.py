@@ -4,8 +4,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 # Load the trained model and scaler
-model = joblib.load("customer_churn_model.joblib")  # Now it's a VotingClassifier
-scaler = joblib.load("scaler.joblib")
+model = joblib.load("customer_churn_model.pkl")  # Now it's a VotingClassifier
+scaler = joblib.load("scaler.pkl")
 
 # Label encoding for 'Geography'
 geography_mapping = {"France": 0, "Spain": 1, "Germany": 2}
