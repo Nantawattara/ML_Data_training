@@ -9,39 +9,34 @@ import os
 app = Flask(__name__)
 CORS(app)
 
+# Initialize variables
+model = None
+scaler = None
+
 # Load models based on file availability
 # Determine the correct model path depending on the environment
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Initialize variables for models
-model = None
-label_encoders = None
-scaler = None
+model_path = os.path.join(BASE_DIR, "customer_churn_model.pkl")
+scaler_path = os.path.join(BASE_DIR, "scaler.pkl")
 
 try:
-    # Try to load the combined model file first
-    model_path = os.path.join(BASE_DIR, "best_model.pkl")
+    # Load the model
     if os.path.exists(model_path):
+        print(f"Loading model from {model_path}")
+        with open(model_path, "rb") as model_file:
+            model = pickle.load(model_file)
+        print("✅ Successfully loaded model")
+    else:
         print(f"⚠️ Could not find {model_path}")
-        # Fall back to separate model files
-        model_path = os.path.join(BASE_DIR, "customer_churn_model.pkl")
-        scaler_path = os.path.join(BASE_DIR, "scaler.pkl")
         
-        if os.path.exists(model_path):
-            print(f"Loading model from {model_path}")
-            with open(model_path, "rb") as model_file:
-                model = pickle.load(model_file)
-            print("✅ Successfully loaded model")
-        else:
-            print(f"⚠️ Could not find {model_path}")
-            
-        if os.path.exists(scaler_path):
-            print(f"Loading scaler from {scaler_path}")
-            with open(scaler_path, "rb") as scaler_file:
-                scaler = pickle.load(scaler_file)
-            print("✅ Successfully loaded scaler")
-        else:
-            print(f"⚠️ Could not find {scaler_path}")
+    # Load the scaler
+    if os.path.exists(scaler_path):
+        print(f"Loading scaler from {scaler_path}")
+        with open(scaler_path, "rb") as scaler_file:
+            scaler = pickle.load(scaler_file)
+        print("✅ Successfully loaded scaler")
+    else:
+        print(f"⚠️ Could not find {scaler_path}")
 
     if model is None:
         raise Exception("Failed to load model from any source")
@@ -63,27 +58,15 @@ def predict():
         data = request.get_json()
         print(f"🔹 Received Data: {data}")
         
-        # Process country using label encoder
-        if label_encoders is not None and "Cus_contry" in label_encoders:
-            # If we're using the best_model.pkl approach with label encoders
-            print(f"🔍 LabelEncoder for country: {label_encoders['Cus_contry'].classes_}")
-            
-            if data["Cus_contry"] not in label_encoders['Cus_contry'].classes_:
-                return jsonify({
-                    "error": f"Invalid country value: {data['Cus_contry']}, must be one of {list(label_encoders['Cus_contry'].classes_)}"
-                }), 400
-            
-            encoded_country = label_encoders["Cus_contry"].transform([data["Cus_contry"]])[0]
-        else:
-            # If we don't have label encoders, we need a different approach
-            print("Warning: Using hardcoded country encoding")
-            country_mapping = {"France": 0, "Spain": 1, "Germany": 2}
-            encoded_country = country_mapping.get(data["Cus_contry"], -1)
-            
-            if encoded_country == -1:
-                return jsonify({
-                    "error": f"Invalid country value: {data['Cus_contry']}, must be one of {list(country_mapping.keys())}"
-                }), 400
+        # Since we don't have label encoders, use direct mapping for country
+        print("Using hardcoded country encoding")
+        country_mapping = {"France": 0, "Spain": 1, "Germany": 2}
+        encoded_country = country_mapping.get(data["Cus_contry"], -1)
+        
+        if encoded_country == -1:
+            return jsonify({
+                "error": f"Invalid country value: {data['Cus_contry']}, must be one of {list(country_mapping.keys())}"
+            }), 400
 
         # Extract and prepare all feature values
         input_features = [
@@ -117,13 +100,8 @@ def predict():
         except:
             probability_str = "N/A"
             
-        # Process the prediction result
-        if label_encoders is not None and "churn" in label_encoders:
-            # Convert encoded prediction back to original label
-            churn_prediction = label_encoders["churn"].inverse_transform([prediction[0]])[0]
-        else:
-            # If we don't have label encoders, just use the raw prediction
-            churn_prediction = "Yes" if prediction[0] == 1 else "No"
+        # Since we don't have label encoders, use direct mapping for churn prediction
+        churn_prediction = "Yes" if prediction[0] == 1 else "No"
 
         print(f"Prediction: {churn_prediction}, Probability: {probability_str}")
         return jsonify({
