@@ -3,16 +3,20 @@ import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-final_model = joblib.load("customer_churn_model.pkl")
-model = final_model["model"]
-label_encoders = final_model["label_encoders"]
+# Load the trained model and scaler
+model = joblib.load("customer_churn_model.joblib")  # Now it's a VotingClassifier
+scaler = joblib.load("scaler.joblib")
 
+# Label encoding for 'Geography'
+geography_mapping = {"France": 0, "Spain": 1, "Germany": 2}
+
+# Create Flask app
 app = Flask(__name__)
 CORS(app)
 
 @app.route("/")
 def home():
-    return jsonify({"message": "Flask API is running on Render"})
+    return jsonify({"message": "Flask API is running"})
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -20,38 +24,41 @@ def predict():
         data = request.get_json()
         print(f"🔹 Received Data: {data}")
 
-        print(f"🔍 LabelEncoder for contry: {label_encoders['Geography'].classes_}")
-
-        if data["sex"] not in label_encoders["Geography"].classes_:
-            print(f"Invalid contry value received: {data['Geography']}")
+        # Validate 'Geography'
+        if data["Geography"] not in geography_mapping:
             return jsonify({
-                "error": f"Invalid contry value: {data['Geography']}, must be one of {label_encoders['Geography'].classes_}"
+                "error": f"Invalid Geography value: {data['Geography']}, must be one of {list(geography_mapping.keys())}"
             }), 400
 
-        country_mapping = {"France": 0, "Spain": 1, "Germany": 2}
-        encoded_country = country_mapping.get(data["Geography"], -1)
-        print(f"Encoded contry: {encoded_country}")
+        encoded_geography = geography_mapping[data["Geography"]]
+        print(f"Encoded Geography: {encoded_geography}")
 
+        # Prepare input features
         features = [
             float(data["Complain"]),
             float(data["Age"]),
             float(data["IsActiveMember"]),
-            float(data["NumOfProducts"]),  
+            float(data["NumOfProducts"]),
             float(data["Balance"]),
-            encoded_country
+            encoded_geography
         ]
 
-        print(f"Features: {features}")
-
         features_array = np.array([features]).reshape(1, -1)
-        prediction = model.predict(features_array)
-        probability  = label_encoders["churn"].inverse_transform([prediction[0]])[0]
+        scaled_features = scaler.transform(features_array)
+
+        # Prediction
+        prediction = model.predict(scaled_features)[0]
+        probability = model.predict_proba(scaled_features)[0][1]  # Probability of churn
+
+        # Convert results
+        churn_prediction = "Yes" if prediction == 1 else "No"
         probability_str = f"{probability:.2f}"
-        churn_prediction = "Yes" if prediction[0] == 1 else "No"
-        print(f"Prediction: {churn_prediction}")
+
+        print(f"Prediction: {churn_prediction}, Probability: {probability_str}")
+
         return jsonify({
             "prediction": churn_prediction,
-            "probability": probability_str,
+            "probability": probability_str
         })
 
     except Exception as e:
