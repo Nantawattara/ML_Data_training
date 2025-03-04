@@ -20,24 +20,24 @@ def predict():
         data = request.get_json()
         print(f"🔹 Received Data: {data}")
 
-        print(f"🔍 LabelEncoder for contry: {label_encoders['Cus_contry'].classes_}")
+        print(f"🔍 LabelEncoder for contry: {label_encoders['Geography'].classes_}")
 
-        if data["sex"] not in label_encoders["Cus_contry"].classes_:
-            print(f"Invalid contry value received: {data['Cus_contry']}")
+        if data["sex"] not in label_encoders["Geography"].classes_:
+            print(f"Invalid contry value received: {data['Geography']}")
             return jsonify({
-                "error": f"Invalid contry value: {data['Cus_contry']}, must be one of {label_encoders['Cus_contry'].classes_}"
+                "error": f"Invalid contry value: {data['Geography']}, must be one of {label_encoders['Geography'].classes_}"
             }), 400
 
         country_mapping = {"France": 0, "Spain": 1, "Germany": 2}
-        encoded_country = country_mapping.get(data["Cus_contry"], -1)
+        encoded_country = country_mapping.get(data["Geography"], -1)
         print(f"Encoded contry: {encoded_country}")
 
         features = [
-            float(data["Cus_report"]),
-            float(data["Cus_age"]),
-            float(data["Cus_memb"]),
-            float(data["Cus_Active"]),  
-            float(data["Cus_money"]),
+            float(data["Complain"]),
+            float(data["Age"]),
+            float(data["IsActiveMember"]),
+            float(data["NumOfProducts"]),  
+            float(data["Balance"]),
             encoded_country
         ]
 
