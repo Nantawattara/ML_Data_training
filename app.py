@@ -8,28 +8,52 @@ import os
 # Create the Flask app
 app = Flask(__name__)
 CORS(app)
+
+# Initialize variables
+model = None
+scaler = None
+
 # Load models based on file availability
 # Determine the correct model path depending on the environment
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(BASE_DIR, "customer_churn_model.pkl")
 scaler_path = os.path.join(BASE_DIR, "scaler.pkl")
 
+# Load model safely
+def load_pickle_safely(path):
+    try:
+        # First try joblib
+        return joblib.load(path)
+    except Exception as e1:
+        print(f"Joblib load failed: {str(e1)}")
+        try:
+            # Then try pickle
+            with open(path, 'rb') as f:
+                return pickle.load(f)
+        except Exception as e2:
+            print(f"Pickle load failed: {str(e2)}")
+            return None
+
 try:
     # Load the model
     if os.path.exists(model_path):
         print(f"Loading model from {model_path}")
-        with open(model_path, "rb") as model_file:
-            model = pickle.load(model_file)
-        print("✅ Successfully loaded model")
+        model = load_pickle_safely(model_path)
+        if model is not None:
+            print("✅ Successfully loaded model")
+        else:
+            print("❌ Failed to load model")
     else:
         print(f"⚠️ Could not find {model_path}")
         
     # Load the scaler
     if os.path.exists(scaler_path):
         print(f"Loading scaler from {scaler_path}")
-        with open(scaler_path, "rb") as scaler_file:
-            scaler = pickle.load(scaler_file)
-        print("✅ Successfully loaded scaler")
+        scaler = load_pickle_safely(scaler_path)
+        if scaler is not None:
+            print("✅ Successfully loaded scaler")
+        else:
+            print("❌ Failed to load scaler")
     else:
         print(f"⚠️ Could not find {scaler_path}")
 
@@ -51,7 +75,7 @@ def predict():
         
     try:
         data = request.get_json()
-        print(f"🔹 Received Data: {data}")
+        print(f"? Received Data: {data}")
         
         # Since we don't have label encoders, use direct mapping for country
         print("Using hardcoded country encoding")
