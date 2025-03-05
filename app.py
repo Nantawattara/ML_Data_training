@@ -46,8 +46,9 @@ def predict():
         scaled_features = scaler.transform(features_array)
 
         # Prediction
-        prediction = model.predict(scaled_features)[0]
-        probability = model.predict_proba(scaled_features)[0][1]
+        prediction = model.predict(scaled_features)
+        probability = model.predict_proba(scaled_features)[:, 1][0]
+        # incase fail [1][0] or [0][1] 
 
         # Convert results
         churn_prediction = "Yes" if prediction == 1 else "No"
