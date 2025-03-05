@@ -7,8 +7,7 @@ from flask_cors import CORS
 model = joblib.load("customer_churn_model.pkl")  # Now it's a VotingClassifier
 scaler = joblib.load("scaler.pkl")
 
-# Label encoding for 'Geography'
-geography_mapping = {"France": 0, "Spain": 1, "Germany": 2}
+geography_mapping = {"france": 0, "spain": 1, "germany": 2}
 
 # Create Flask app
 app = Flask(__name__)
